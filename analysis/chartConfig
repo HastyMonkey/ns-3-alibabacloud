@@ -18,7 +18,6 @@ attnComp 275641
 mlpComp 440705
 switchNode 0
 switchNodePort 1
-switchNodeTotalRate 16000
+switchNodePortNum 4
 actFlag 0
 nodeNum 4
-
