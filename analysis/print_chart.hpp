@@ -333,7 +333,7 @@ static void dataCollection(ns3::TraceFormat &tr) {
                 printf("%lu n:%u %u:%u %u %s ecn:%x %08x %08x %x %u", tr.time, tr.node, tr.intf, tr.qidx, tr.qlen, EventToStr((ns3::Event)tr.event), tr.ecn, tr.sip, tr.dip, tr.l3Prot, tr.size);
                 break;
         }
-    	printf("\n");
+        printf("\n");
     }
     if (tr.node != groupDataVec[groupCount].switchNode) {
         return;
