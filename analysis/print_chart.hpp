@@ -15,7 +15,7 @@
 #include <iostream>
 
 struct groupDataStruct{
-    std::string trPath = "/opt/pdk/softdeveloper/kyh/gpt_7B_mix_tp4.tr";
+    std::string trPath = "/etc/astra-sim/simulation/llama_hpn7_mix.tr";
     std::string title = "tp4";
     short tp = 4;
     short dp = 1;
@@ -35,7 +35,7 @@ struct groupDataStruct{
 };
 struct xy{
     uint64_t xTime;
-    float yCount = 0;
+    uint64_t yCount = 0;
 };
 struct dataPieStruct{
     uint64_t totalTime;
@@ -79,7 +79,7 @@ bool commFlag = false;
 dataPacketMsg dataPacket;
 std::vector<dataPacketStr> dataPacketStrVec;
 
-std::vector<uint64_t> windowTime = {0, 0}; //
+std::vector<uint64_t> windowTime = {0, 0};
 short windowLength = 400; // 400ns
 short windowCount = 10; // step = 400/10 = 40ns
 std::vector<std::vector<uint64_t>> windowVec = {{},{}};
@@ -88,13 +88,24 @@ uint64_t totalTime = 0;
 uint64_t tempTime = 0;
 uint64_t beginTime = 0;
 int maxValue = 0;
+bool printTraceFlag = false;
+bool printFlowFlag = false;
+std::vector<bool> eventType = {0, 0, 1, 0};
+
+uint64_t totalCount = 0;
+uint64_t oneCount = 0;
 
 static void windowComp(ns3::TraceFormat &tr, short num);
+static char l3ProtToChar(uint8_t p);
 
 static short initChart(std::string configPath) {
     //init groupDataVec
     std::ifstream conf;
     conf.open(configPath);
+    if (!conf) {
+        print("Error opening configFile!\n");
+        return 0;
+    }
     while (!conf.eof()) {
         std::string key;
         conf >> key;
@@ -102,6 +113,24 @@ static short initChart(std::string configPath) {
             std::string v;
             conf >> v;
             outputFile = v;
+        } else if (key.compare("printTrace") == 0) {
+            short v;
+            conf >> v;
+            printTraceFlag = v;
+        } else if (key.compare("eventType") == 0) {
+            short v;
+            conf >> v;
+            eventType[0] = v;
+            conf >> v;
+            eventType[1] = v;
+            conf >> v;
+            eventType[2] = v;
+            conf >> v;
+            eventType[3] = v;
+        } else if (key.compare("printFlow") == 0) {
+            short v;
+            conf >> v;
+            printFlowFlag = v;
         } else if (key.compare("group") == 0) {
             groupDataStruct groupData;
             groupDataVec.push_back(groupData);
@@ -162,10 +191,10 @@ static short initChart(std::string configPath) {
             int v;
             conf >> v;
             groupDataVec[groupCount].switchNodePort = v;
-        } else if (key.compare("switchNodeTotalRate") == 0) {
+        } else if (key.compare("switchNodePortNum") == 0) {
             int v;
             conf >> v;
-            groupDataVec[groupCount].switchNodeTotalRate = v;
+            groupDataVec[groupCount].switchNodeTotalRate = groupDataVec[groupCount].dataRate*v;
         } else if (key.compare("actFlag") == 0) {
             short v;
             conf >> v;
@@ -279,7 +308,53 @@ static std::string getTrPath() {
 }
 
 static void dataCollection(ns3::TraceFormat &tr) {
-    if ( tr.event != 2) return;
+    if (printTraceFlag) {
+        switch (tr.l3Prot){
+    		case 0x6:
+    		case 0x11:
+    			printf("%lu n:%u %u:%u %u %s ecn:%x %08x %08x %hu %hu %c %u %lu %u %hu(%hu)", tr.time, tr.node, tr.intf, tr.qidx, tr.qlen, EventToStr((ns3::Event)tr.event), tr.ecn, tr.sip, tr.dip, tr.data.sport, tr.data.dport, l3ProtToChar(tr.l3Prot), tr.data.seq, tr.data.ts, tr.data.pg, tr.size, tr.data.payload);
+    			break;
+    		case 0xFC: // ACK
+    			printf("%lu n:%u %u:%u %u %s ecn:%x %08x %08x %u %u %c 0x%02X %u %u %lu %hu", tr.time, tr.node, tr.intf, tr.qidx, tr.qlen, EventToStr((ns3::Event)tr.event), tr.ecn, tr.sip, tr.dip, tr.ack.sport, tr.ack.dport, l3ProtToChar(tr.l3Prot), tr.ack.flags, tr.ack.pg, tr.ack.seq, tr.ack.ts, tr.size);
+    			break;
+    		case 0xFD: // NACK
+    			printf("%lu n:%u %u:%u %u %s ecn:%x %08x %08x %u %u %c 0x%02X %u %u %lu %hu", tr.time, tr.node, tr.intf, tr.qidx, tr.qlen, EventToStr((ns3::Event)tr.event), tr.ecn, tr.sip, tr.dip, tr.ack.sport, tr.ack.dport, l3ProtToChar(tr.l3Prot), tr.ack.flags, tr.ack.pg, tr.ack.seq, tr.ack.ts, tr.size);
+    			break;
+    		case 0xFE: // PFC
+    			printf("%lu n:%u %u:%u %u %s ecn:%x %08x %08x %c %u %u %u %hu", tr.time, tr.node, tr.intf, tr.qidx, tr.qlen, EventToStr((ns3::Event)tr.event), tr.ecn, tr.sip, tr.dip, l3ProtToChar(tr.l3Prot), tr.pfc.time, tr.pfc.qlen, tr.pfc.qIndex, tr.size);
+    			break;
+    		case 0xFF: // CNP
+    			printf("%lu n:%u %u:%u %u %s ecn:%x %08x %08x %c %u %u %u %u %u", tr.time, tr.node, tr.intf, tr.qidx, tr.qlen, EventToStr((ns3::Event)tr.event), tr.ecn, tr.sip, tr.dip, l3ProtToChar(tr.l3Prot), tr.cnp.fid, tr.cnp.qIndex, tr.cnp.ecnBits, tr.cnp.seq, tr.size);
+    			break;
+    		case 0x0: // QpAv
+    			printf("%lu n:%u %u:%u %s %08x %08x %u %u", tr.time, tr.node, tr.intf, tr.qidx, EventToStr((ns3::Event)tr.event), tr.sip, tr.dip, tr.qp.sport, tr.qp.dport);
+    			break;
+    		default:
+    			printf("%lu n:%u %u:%u %u %s ecn:%x %08x %08x %x %u", tr.time, tr.node, tr.intf, tr.qidx, tr.qlen, EventToStr((ns3::Event)tr.event), tr.ecn, tr.sip, tr.dip, tr.l3Prot, tr.size);
+    			break;
+    	}
+    	printf("\n");
+    }
+    if (tr.node != groupDataVec[groupCount].switchNode) {
+        return;
+    }
+    if (printFlowFlag && tr.event == 2) {
+        {
+            totalCount += tr.data.payload;
+            xy temp;
+            temp.xTime = tr.time;
+            temp.yCount = totalCount;
+            timeToCount[0].push_back(temp);
+        }
+        if (tr.intf == groupDataVec[groupCount].switchNodePort) {
+            oneCount += tr.data.payload;
+            xy temp;
+            temp.xTime = tr.time;
+            temp.yCount = oneCount;
+            timeToCount[1].push_back(temp);
+        }
+    }
+    if (!eventType[tr.event]) return;
     if (tr.size== 60) {
         dataPacket.ackNum++;
     } else {
@@ -296,28 +371,28 @@ static void dataCollection(ns3::TraceFormat &tr) {
         maxValue = tr.size;
     }
     dataPacket.data[tr.size/1000]++;
-    if (!commFlag && beginTime!= 0 && tr.time - tempTime > 5000 ) {
+    if (!commFlag && beginTime!= 0 && tr.time - tempTime > 5000) {
         commFlag = true;
         commData.push_back(tempTime - beginTime + groupDataVec[groupCount].sendLat);
     }
-    if (beginTime == 0 && tr.size != 0) {
-        beginTime = tr.time;
+    if (!printFlowFlag) {
+        if (beginTime == 0 && tr.size != 0) {
+            beginTime = tr.time;
+        }
+    
+        tempTime = tr.time;
+        
+        windowComp(tr, 0);
+        if (tr.intf != groupDataVec[groupCount].switchNodePort) {
+            return;
+        }
+        windowComp(tr, 1);
     }
-
-    tempTime = tr.time;
-    if (tr.node != groupDataVec[groupCount].switchNode) {
-        return;
-    }
-    windowComp(tr, 0);
-    if (tr.intf != groupDataVec[groupCount].switchNodePort) {
-        return;
-    }
-    windowComp(tr, 1);
 }
 
 static void setLineData() {
     printf("dataLineVec:%d\n", dataLineVec.size());
-    printf("timeToCount:%d\n", timeToCount[1].size());
+    printf("timeToCount:%d\n", timeToCount[0].size());
     for (size_t ii = 0; ii < timeToCount.size(); ++ii) {
         std::ostringstream data;
         data << "[";
@@ -857,6 +932,24 @@ static void windowComp(ns3::TraceFormat &tr, short num) {
     }
 }
 
+static inline char l3ProtToChar(uint8_t p){
+	switch (p){
+		case 0x6:
+			return 'T';
+		case 0x11:
+			return 'U';
+		case 0xFC: // ACK
+			return 'A';
+		case 0xFD: // NACK
+			return 'N';
+		case 0xFE: // PFC
+			return 'P';
+		case 0xFF:
+			return 'C';
+		default:
+			return 'X';
+	}
+}
 
 
 
