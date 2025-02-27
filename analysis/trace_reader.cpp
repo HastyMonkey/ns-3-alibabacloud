@@ -17,15 +17,15 @@ int main(int argc, char** argv){
     }
     short num = initChart(argv[1]);
     if (num == 0) {
-	return 0;
+        return 0;
     }
     for (int i = 0; i < num;) {
         std::string strChar = getTrPath();
         FILE* file = fopen(strChar.c_str(), "r");
-	if (file == NULL) {
-	    print("Error opening tr_file!\n");
-	    continue;
-	}
+    	if (file == NULL) {
+    	    print("Error opening tr_file!\n");
+    	    continue;
+    	}
         // read trace
         TraceFormat tr;
         while (tr.Deserialize(file) > 0){
@@ -34,7 +34,6 @@ int main(int argc, char** argv){
         setChartData();
         i++;
     }
-
     printChart();
     return 0;
 }
