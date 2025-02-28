@@ -26,6 +26,8 @@ int main(int argc, char** argv){
     	    print("Error opening tr_file!\n");
     	    continue;
     	}
+        SimSetting sim_setting;
+        sim_setting.Deserialize(file);
         // read trace
         TraceFormat tr;
         while (tr.Deserialize(file) > 0){
