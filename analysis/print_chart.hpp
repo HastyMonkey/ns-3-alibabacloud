@@ -218,8 +218,8 @@ static short initChart(std::string configPath) {
     <html>
     <head>
       <meta charset="UTF-8">
-      <!-- 假设 echarts.min.js 文件与 HTML 文件在同一目录下 -->
-      <script src="echarts.min.js"></script>
+      <!-- 使用echart外部资源 -->
+      <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.2/dist/echarts.min.js"></script>
     <style>
      #chartPieContainer {
         display: flex;
